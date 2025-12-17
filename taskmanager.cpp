@@ -175,17 +175,19 @@ std::string StatToStr (const Status& stat) {
 
 Task* checkTaskInp(TaskManager& taskmanager) {
 	std::string title;
+	std::string exitStr = "0";
 	Task* foundTask = nullptr;
 	std::cout << "Enter Task Title: [Enter 0 to exit.]" << std::endl;
-	while (foundTask == nullptr && title != "0") {
+	while (foundTask == nullptr && title != exitStr) {
 		std::cout << "-> ";
 		std::getline(std::cin, title);
 
-		if (title == "0") { break; }
-
+		if (title == exitStr) {
+			break;
+		}
 		foundTask = taskmanager.findTask(title);
 		if (foundTask == nullptr) {
-			std::cout << "\nNo valid Task with name '" << title << "' found." << std::endl;
+			std::cout << "\nNo Task with name '" << title << "' found." << std::endl;
 		}
 	}
 	return foundTask;
@@ -197,18 +199,23 @@ std::string checkInp(std::string& inpStr, std::vector<std::string>& allowVec) {
 		std::transform(elem.begin(), elem.end(), elem.begin(), ::tolower);
 		allowVecLow.push_back(elem);
 	}
+	std::string exitStr = "0";
 	do {
+		std::cout << "[Enter 0 to exit.]" << std::endl;
 		std::cout << "-> ";
 		std::getline(std::cin, inpStr);
+		if (inpStr == exitStr) {
+			break;
+		}
 		std::transform(inpStr.begin(), inpStr.end(), inpStr.begin(), ::tolower);
 		if (std::find(allowVecLow.begin(), allowVecLow.end(), inpStr) == allowVecLow.end()) {
-			std::cout << "Not a valid Input.\nAvailable Inputs: ";
+			std::cout << "\nNot a valid Input.\nAvailable Inputs: ";
 			for (std::string& elem : allowVec) {
 				std::cout << elem << " ";
 			}
 			std::cout << std::endl;
 		}
-	} while (std::find(allowVecLow.begin(), allowVecLow.end(), inpStr) == allowVecLow.end());
+	} while (std::find(allowVecLow.begin(), allowVecLow.end(), inpStr) == allowVecLow.end() && inpStr != exitStr);
 	return inpStr;
 }
 
@@ -253,6 +260,7 @@ int main() {
 	int inpChoice;
 	std::string title, category, dueDate, priority, status, inpChange, inpSort;
 	std::string emptyStr = "";
+	std::string exitStr = "0";
 	std::vector<std::string> PrioStrVec = {"Low", "Medium", "High"};
 	std::vector<std::string> StatStrVec = {"Open", "InProgress", "In Progress", "Done"};
 	std::vector<std::string> ChangeStrVec = {"1", "2"};
