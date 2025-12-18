@@ -33,9 +33,9 @@ class Task {
 		void print() const {
 			std::cout << "Title: " << title << ", Category: " << category << ", Due Date: " << dueDate;
 			switch(priority) {
-				case Priority::Low: std::cout << ", Priority: Low"; break;
-				case Priority::Medium: std::cout << ", Priority: Medium"; break;
-				case Priority::High: std::cout << ", Priority: High"; break;
+				case Priority::Low: std::cout << ", Priority: \033[32mLow\033[0m"; break;
+				case Priority::Medium: std::cout << ", Priority: \033[33mMedium\033[0m"; break;
+				case Priority::High: std::cout << ", Priority: \033[31mHigh\033[0m"; break;
 			}		
 			switch(status) {
 				case Status::Open: std::cout << ", Status: Open" << std::endl; break;
@@ -126,7 +126,7 @@ Priority strToPrio(const std::string& inp) {
 	if (lower == "high") {
 		return Priority::High;
 	}
-	throw std::invalid_argument("Invalid Priority: " + inp);
+	throw std::invalid_argument("\033[31mInvalid Priority:\033[0m " + inp);
 }
 
 Status strToStat(const std::string& inp) {
@@ -141,7 +141,7 @@ Status strToStat(const std::string& inp) {
 	if (lower == "done") {
 		return Status::Done;
 	}
-	throw std::invalid_argument("Invalid Status: " + inp);
+	throw std::invalid_argument("\033[31mInvalid Status:\033[0m " + inp);
 }
 
 
@@ -155,7 +155,7 @@ std::string PrioToStr (const Priority& prio) {
 	if (prio == Priority::High) {
 		return "High";
 	}
-	throw std::invalid_argument("Invalid Priority.");
+	throw std::invalid_argument("\033[31mInvalid Priority.\033[0m");
 }
 
 std::string StatToStr (const Status& stat) {
@@ -168,11 +168,95 @@ std::string StatToStr (const Status& stat) {
 	if (stat == Status::Done) {
 		return "Done";
 	}
-	throw std::invalid_argument("Invalid Status.");
+	throw std::invalid_argument("\033[31mInvalid Status.\033[0m");
 }
 
 
 constexpr const char* EXIT_STR = "0";
+
+std::string valiDATE() {
+	const int MIN = 1;
+    const int MONTHS = 12;
+    const int LONG_MONTH_DAYS = 31;
+    const int SHORT_MONTH_DAYS = 30;
+    const int FEBRUARY_DAYS = 28;
+    const int LEAP_FEBRUARY_DAYS = 29;
+
+    const std::vector<int> LONG_MONTHS = {1,3,5,7,8,10,12};
+    const std::vector<int> SHORT_MONTHS = {4,6,9,11};
+    const int FEBRUARY_MONTH = 2;
+
+    const int DATE_LENGTH = 10;
+
+    const std::vector<char> SEPARATORS = {'-', '/', '.'};
+
+    std::string date;
+    bool date_valid = false;
+    int day, month, year;
+    int max_days = 0;
+
+    do {
+		std::cout << "-> ";
+		std::getline(std::cin, date);
+
+		if (date == EXIT_STR) {
+			return date;
+			break;
+		}
+
+        if (date.size() != DATE_LENGTH) {
+            std::cout << "\033[31mInvalid date format.\033[0m" << std::endl;
+            continue;
+        }
+        char sep1 = date[2];
+        char sep2 = date[5];
+
+        if ((std::find(SEPARATORS.begin(), SEPARATORS.end(), sep1) == SEPARATORS.end()) || 
+        (std::find(SEPARATORS.begin(), SEPARATORS.end(), sep2) == SEPARATORS.end())) {
+            std::cout << "\033[31mInvalid date format.\033[0m" << std::endl;
+            continue;
+        }
+        try {
+            day = std::stoi(date.substr(0,2));
+            month = std::stoi(date.substr(3,2));
+            year = std::stoi(date.substr(6,4));
+        }
+        catch (const std::exception&) {
+            std::cout << "\033[31mInvalid date format.\033[0m" << std::endl;
+            continue;
+        }
+        if (day >= MIN && day <= LONG_MONTH_DAYS && month >= MIN && month <= MONTHS && year >= MIN) {
+            // Check february
+            if (month == FEBRUARY_MONTH) {
+                if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+                    max_days = LEAP_FEBRUARY_DAYS;
+                }
+                else {
+                    max_days = FEBRUARY_DAYS;
+                }
+            }
+            // Check long months
+            else if (std::find(LONG_MONTHS.begin(), LONG_MONTHS.end(), month) != LONG_MONTHS.end()) {
+                max_days = LONG_MONTH_DAYS;
+            }
+            // Check short months
+            else if (std::find(SHORT_MONTHS.begin(), SHORT_MONTHS.end(), month) != SHORT_MONTHS.end()) {
+                max_days = SHORT_MONTH_DAYS;
+            }
+            if (day <= max_days) {
+                date_valid = true;
+            }
+            else {
+                std::cout << "\033[31mInvalid date.\033[0m" << std::endl;
+            }     
+        }
+        else {
+            std::cout << "\033[31mInvalid date.\033[0m" << std::endl;
+        } 
+    } while (date_valid == false);
+	return date;
+}
+
 
 std::optional<size_t> checkTaskInp(TaskManager& taskmanager) {
 	std::string title;
@@ -188,7 +272,7 @@ std::optional<size_t> checkTaskInp(TaskManager& taskmanager) {
 		std::transform(title.begin(), title.end(), title.begin(), ::tolower);
 		foundTaskIndex = taskmanager.findTaskIndex(title);
 		if (foundTaskIndex == std::nullopt) {
-			std::cout << "\nNo Task with name '" << title << "' found." << std::endl;
+			std::cout << "\n\033[31mNo Task with name '\033[0m" << title << "\033[31m' found.\033[0m" << std::endl;
 		}
 	}
 	return foundTaskIndex;
@@ -209,7 +293,7 @@ std::string checkInp(std::string& inpStr, const std::vector<std::string>& allowV
 		}
 		std::transform(inpStr.begin(), inpStr.end(), inpStr.begin(), ::tolower);
 		if (std::find(allowVecLow.begin(), allowVecLow.end(), inpStr) == allowVecLow.end()) {
-			std::cout << "\nNot a valid Input.\nAvailable Inputs: ";
+			std::cout << "\n\033[31mNot a valid Input.\033[0m\nAvailable Inputs: ";
 			for (std::string elem : allowVec) {
 				std::cout << elem << " ";
 			}
@@ -243,9 +327,8 @@ int main() {
 
 	TaskManager taskmanager;
 
-
 	// Test examples
-	Task dennis("dennis files", "it", "28-02-2028", Priority::High, Status::Open);
+	Task dennis("dennis files", "it", "28-02-2028", Priority::Medium, Status::Open);
 	Task finja("finja", "service", "25-12-2025", Priority::High, Status::Open);
 	Task finja2("finja2", "service", "25-12-2025", Priority::Medium, Status::InProgress);
 	Task xaver("xavi", "humor", "23-06-1998", Priority::Low, Status::Done);
@@ -284,8 +367,8 @@ int main() {
 				if (category == EXIT_STR) { break; }
 				std::transform(category.begin(), category.end(), category.begin(), ::tolower);
 
-				std::cout << "\nEnter Task Due Date (DD-MM-YYYY):\n[Enter 0 to exit.]\n-> ";
-				std::getline(std::cin, dueDate);
+				std::cout << "\nEnter Task Due Date (DD-MM-YYYY):\n[Enter 0 to exit.]" << std::endl;
+				dueDate = valiDATE();
 				if (dueDate == EXIT_STR) { break; }
 
 				std::cout << "\nEnter Task Priority (Low/Medium/High):" << std::endl;
@@ -402,11 +485,11 @@ int main() {
 				}
 				break;
 			default:
-				std::cout << "\nNo valid Input." << std::endl;
+				std::cout << "\n\033[31mNo valid Input.\033[0m" << std::endl;
 		}
 	} while (inpChoice != 0);
 
-return 0;
+	return 0;
 }
 
 // Can enter chars/strings in main menu -> Will immidiately close program (only integers fine -> stop or exec)
