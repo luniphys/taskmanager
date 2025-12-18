@@ -177,7 +177,7 @@ constexpr const char* EXIT_STR = "0";
 std::optional<size_t> checkTaskInp(TaskManager& taskmanager) {
 	std::string title;
 	std::optional<size_t> foundTaskIndex = std::nullopt;
-	std::cout << "Enter Task Title: [Enter 0 to exit.]" << std::endl;
+	std::cout << "Enter Task Title:\n[Enter 0 to exit.]" << std::endl;
 	while (foundTaskIndex == std::nullopt && title != EXIT_STR) {
 		std::cout << "-> ";
 		std::getline(std::cin, title);
@@ -185,6 +185,7 @@ std::optional<size_t> checkTaskInp(TaskManager& taskmanager) {
 		if (title == EXIT_STR) {
 			break;
 		}
+		std::transform(title.begin(), title.end(), title.begin(), ::tolower);
 		foundTaskIndex = taskmanager.findTaskIndex(title);
 		if (foundTaskIndex == std::nullopt) {
 			std::cout << "\nNo Task with name '" << title << "' found." << std::endl;
@@ -199,8 +200,8 @@ std::string checkInp(std::string& inpStr, const std::vector<std::string>& allowV
 		std::transform(elem.begin(), elem.end(), elem.begin(), ::tolower);
 		allowVecLow.push_back(elem);
 	}
+	std::cout << "[Enter 0 to exit.]" << std::endl;
 	do {
-		std::cout << "[Enter 0 to exit.]" << std::endl;
 		std::cout << "-> ";
 		std::getline(std::cin, inpStr);
 		if (inpStr == EXIT_STR) {
@@ -244,9 +245,9 @@ int main() {
 
 
 	// Test examples
-	Task dennis("Dennis Files", "it", "28-02-2028", Priority::High, Status::Open);
-	Task finja("Finja", "service", "25-12-2025", Priority::High, Status::Open);
-	Task finja2("Finja2", "service", "25-12-2025", Priority::Medium, Status::InProgress);
+	Task dennis("dennis files", "it", "28-02-2028", Priority::High, Status::Open);
+	Task finja("finja", "service", "25-12-2025", Priority::High, Status::Open);
+	Task finja2("finja2", "service", "25-12-2025", Priority::Medium, Status::InProgress);
 	Task xaver("xavi", "humor", "23-06-1998", Priority::Low, Status::Done);
 	taskmanager.addTask(finja2);
 	taskmanager.addTask(xaver);
@@ -273,20 +274,27 @@ int main() {
 			case 0: // Stop Loop
 				break;
 			case 1: { // Add Task 
-				std::cout << "\nAdd Task.\nEnter Task Title:\n-> ";
+				std::cout << "\nAdd Task.\nEnter Task Title:\n[Enter 0 to exit.]\n-> ";
 				std::getline(std::cin, title);
-				std::cout << "\nEnter Task Category:\n-> ";
+				if (title == EXIT_STR) { break; }
+				std::transform(title.begin(), title.end(), title.begin(), ::tolower);
+
+				std::cout << "\nEnter Task Category:\n[Enter 0 to exit.]\n-> ";
 				std::getline(std::cin, category);
+				if (category == EXIT_STR) { break; }
 				std::transform(category.begin(), category.end(), category.begin(), ::tolower);
 
-				std::cout << "\nEnter Task Due Date (DD-MM-YYYY):\n-> ";
+				std::cout << "\nEnter Task Due Date (DD-MM-YYYY):\n[Enter 0 to exit.]\n-> ";
 				std::getline(std::cin, dueDate);
+				if (dueDate == EXIT_STR) { break; }
 
 				std::cout << "\nEnter Task Priority (Low/Medium/High):" << std::endl;
 				priority = checkInp(priority, PrioStrVec);
+				if (priority == EXIT_STR) { break; }
 
 				std::cout << "\nEnter Task Status (Open/InProgress/Done):" << std::endl;
 				status = checkInp(status, StatStrVec);
+				if (status == EXIT_STR) { break; }
 
 				Task task(title, category, dueDate, strToPrio(priority), strToStat(status));
 				taskmanager.addTask(task);
@@ -328,6 +336,7 @@ int main() {
 				if (inpChange == "1") {
 					std::cout << "\nEnter new Task Status (Open/InProgress/Done):\n";
 					status = checkInp(status, StatStrVec);
+					if (status == EXIT_STR) { break; }
 					std::cout << "\nChanged Status of '" << foundTask.getTitle() << "' from '" << StatToStr(foundTask.getStatus());
 					foundTask.setStatus(strToStat(status));
 					std::cout << "' to '" << StatToStr(foundTask.getStatus()) << "'." << std::endl; 
@@ -335,6 +344,7 @@ int main() {
 				if (inpChange == "2") {
 					std::cout << "\nEnter new Task Priority (Low/Medium/High):\n";
 					priority = checkInp(priority, PrioStrVec);
+					if (priority == EXIT_STR) { break; }
 					std::cout << "\nChanged Priority of '" << foundTask.getTitle() << "' from '" << PrioToStr(foundTask.getPriority());
 					foundTask.setPriority(strToPrio(priority)) ;
 					std::cout << "' to '" << PrioToStr(foundTask.getPriority()) << "'." << std::endl;
@@ -354,6 +364,8 @@ int main() {
 				}
 				std::cout << "\nFilter Category.\nEnter Category name:" << std::endl;
 				category = checkInp(category, CatStrVec);
+				if (category == EXIT_STR) { break; }
+
 				std::vector<Task> filteredTasks = taskmanager.filterByCategory(category);
 				printMany(filteredTasks, true, category);
 				break;
@@ -361,6 +373,7 @@ int main() {
 			case 7: { // Filter by Priority
 				std::cout << "\nFilter Priority.\nEnter Priority level (Low/Medium/High):" << std::endl;
 				priority = checkInp(priority, PrioStrVec);
+				if (priority == EXIT_STR) { break; }
 				
 				std::vector<Task> filteredTasks = taskmanager.filterByPriority(strToPrio(priority));
 				printMany(filteredTasks, true, priority);
@@ -369,13 +382,14 @@ int main() {
 			case 8: { // Filter by Status
 				std::cout << "\nFilter Status.\nEnter Status level (Open/InProgress/Done):" << std::endl;
 				status = checkInp(status, StatStrVec);
+				if (status == EXIT_STR) { break; }
 
 				std::vector<Task> filteredTasks = taskmanager.filterByStatus(strToStat(status));
 				printMany(filteredTasks, true, status);
 				break;
 			}
 			case 9: // Sort alphabetically / by Priority
-				std::cout << "Sort Alphabetically (1) / By Priority (2):\n";
+				std::cout << "\nSort Alphabetically (1) / By Priority (2):\n";
 				inpSort = checkInp(inpSort, ChangeStrVec);
 
 				if (inpSort == "1") {
@@ -388,9 +402,11 @@ int main() {
 				}
 				break;
 			default:
-				std::cout << "No valid Input." << std::endl;
+				std::cout << "\nNo valid Input." << std::endl;
 		}
 	} while (inpChoice != 0);
 
 return 0;
 }
+
+// Can enter chars/strings in main menu -> Will immidiately close program (only integers fine -> stop or exec)
