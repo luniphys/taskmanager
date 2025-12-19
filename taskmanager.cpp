@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <string>
 #include <optional>
+#include <fstream>
+
 
 enum class Priority {Low, Medium, High};
 enum class Status {Open, InProgress, Done};
@@ -172,6 +174,24 @@ std::string StatToStr (const Status& stat) {
 }
 
 
+void createJSON(TaskManager& taskmanager) {
+	std::ofstream file("tasks.json");
+	file << "{\"tasks\": [\n";
+	for (size_t i = 0; i < taskmanager.getTasks().size(); i++) {
+		file << "	{\"title\": \"" << taskmanager.getTasks()[i].getTitle() << "\", ";
+		file << "\"category\": \"" << taskmanager.getTasks()[i].getCategory() << "\", ";
+		file << "\"dueDate\": \"" << taskmanager.getTasks()[i].getDueDate() << "\", ";
+		file << "\"priority\": \"" << PrioToStr(taskmanager.getTasks()[i].getPriority()) << "\", ";
+		file << "\"status\": \"" << StatToStr(taskmanager.getTasks()[i].getStatus()) << "\"}";
+		if (i != taskmanager.getTasks().size() - 1) {
+			file << ",\n";
+		}
+	}
+	file << "\n	]\n}";
+	file.close();
+}
+
+
 constexpr const char* EXIT_STR = "0";
 
 std::string valiDATE() {
@@ -324,18 +344,20 @@ void printMany(const std::vector<Task>& tasks, bool filterBool, const std::strin
 
 
 int main() {
-
+	
 	TaskManager taskmanager;
 
+
 	// Test examples
-	Task dennis("dennis files", "it", "28-02-2028", Priority::Medium, Status::Open);
-	Task finja("finja", "service", "25-12-2025", Priority::High, Status::Open);
-	Task finja2("finja2", "service", "25-12-2025", Priority::Medium, Status::InProgress);
-	Task xaver("xavi", "humor", "23-06-1998", Priority::Low, Status::Done);
-	taskmanager.addTask(finja2);
-	taskmanager.addTask(xaver);
-	taskmanager.addTask(finja);
-	taskmanager.addTask(dennis);
+	Task addfct("adding max function", "it", "28-02-2026", Priority::Medium, Status::Open);
+	Task custcall("call customer id:1907", "customer service", "25-12-2025", Priority::High, Status::InProgress);
+	Task cleaning("cleaning table", "private", "05-12-2025", Priority::Low, Status::Done);
+	Task files("sending files to co-worker:650", "it", "01-01-2026", Priority::High, Status::Open);
+	taskmanager.addTask(addfct);
+	taskmanager.addTask(custcall);
+	taskmanager.addTask(cleaning);
+	taskmanager.addTask(files);
+
 
 	int inpChoice;
 	std::string title, category, dueDate, priority, status, inpChange, inpSort;
@@ -345,6 +367,9 @@ int main() {
 	std::vector<std::string> ChangeStrVec = {"1", "2"};
 	
 	do {
+
+		createJSON(taskmanager);
+
 		std::cout << "\n**************************************************************************" << std::endl;
 		std::cout << "Task Manager:\n1: Add Task\n2: Remove Task\n3: Find Task\n4: Change Status/Priority" <<
 					 "\n5: List available Tasks\n6: Filter by Category\n7: Filter by Priority" <<
@@ -355,7 +380,7 @@ int main() {
 
 		switch (inpChoice) {
 			case 0: // Stop Loop
-				std::cout << "\n\033[32mBye, bye! :)\033[0m\n" << std::endl;
+				std::cout << "\n\033[32mBye, bye!\033[0m :)\n" << std::endl;
 				break;
 			case 1: { // Add Task 
 				std::cout << "\nAdd Task.\nEnter Task Title:\n[Enter 0 to exit.]\n-> ";

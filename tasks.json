@@ -1,0 +1,7 @@
+{"tasks": [
+	{"title": "adding max function", "category": "it", "dueDate": "28-02-2026", "priority": "Medium", "status": "Open"},
+	{"title": "call customer id:1907", "category": "customer service", "dueDate": "25-12-2025", "priority": "High", "status": "InProgress"},
+	{"title": "cleaning table", "category": "private", "dueDate": "05-12-2025", "priority": "Low", "status": "Done"},
+	{"title": "sending files to co-worker:650", "category": "it", "dueDate": "01-01-2026", "priority": "High", "status": "Open"}
+	]
+}
