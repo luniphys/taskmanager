@@ -347,7 +347,7 @@ int main() {
 	
 	TaskManager taskmanager;
 
-
+	/*
 	// Test examples
 	Task addfct("adding max function", "it", "28-02-2026", Priority::Medium, Status::Open);
 	Task custcall("call customer id:1907", "customer service", "25-12-2025", Priority::High, Status::InProgress);
@@ -357,10 +357,11 @@ int main() {
 	taskmanager.addTask(custcall);
 	taskmanager.addTask(cleaning);
 	taskmanager.addTask(files);
+	*/
 
 
 	int inpChoice;
-	std::string title, category, dueDate, priority, status, inpChange, inpSort;
+	std::string inpMenu, title, category, dueDate, priority, status, inpChange, inpSort;
 	std::string emptyStr = "";
 	std::vector<std::string> PrioStrVec = {"Low", "Medium", "High"};
 	std::vector<std::string> StatStrVec = {"Open", "InProgress", "In Progress", "Done"};
@@ -375,8 +376,15 @@ int main() {
 					 "\n5: List available Tasks\n6: Filter by Category\n7: Filter by Priority" <<
 					 "\n8: Filter by Status\n9: Sort Tasks\n0: End\n-> ";
 
-		std::cin >> inpChoice;
-		std::cin.ignore();
+		std::getline(std::cin, inpMenu);
+		try {
+			inpChoice = stoi(inpMenu);
+		}
+		catch (std::exception&) {
+			std::cout << "\n\033[31mInvalid Input.\033[0m" << std::endl;
+			continue;
+		}
+
 
 		switch (inpChoice) {
 			case 0: // Stop Loop
@@ -517,5 +525,3 @@ int main() {
 
 	return 0;
 }
-
-// Can enter chars/strings in main menu -> Will immidiately close program (only integers fine -> stop or exec)
