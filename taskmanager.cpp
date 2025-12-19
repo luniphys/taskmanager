@@ -306,7 +306,7 @@ std::string checkInp(std::string& inpStr, const std::vector<std::string>& allowV
 void printMany(const std::vector<Task>& tasks, bool filterBool, const std::string& CatPrioStat) {
 	std::cout << "\n--------------------------------------------------------------------------" << std::endl;
 	if (tasks.size() == 0 && filterBool) {
-		std::cout << "\nNo Tasks with '" << CatPrioStat << "' found." << std::endl;
+		std::cout << "\n\033[31mNo Tasks with '\033[0m" << CatPrioStat << "\033[31m' found.\033[0m" << std::endl;
 	}
 	else {
 		if (filterBool) {
@@ -355,6 +355,7 @@ int main() {
 
 		switch (inpChoice) {
 			case 0: // Stop Loop
+				std::cout << "\n\033[32mBye, bye! :)\033[0m\n" << std::endl;
 				break;
 			case 1: { // Add Task 
 				std::cout << "\nAdd Task.\nEnter Task Title:\n[Enter 0 to exit.]\n-> ";
@@ -381,7 +382,7 @@ int main() {
 
 				Task task(title, category, dueDate, strToPrio(priority), strToStat(status));
 				taskmanager.addTask(task);
-				std::cout << "\nAdded " << title << "." << std::endl;
+				std::cout << "\n\033[32mAdded\033[0m '" << title << "\033[32m'.\033[0m" << std::endl;
 				break;
 			}
 			case 2: { // Remove Task
@@ -390,7 +391,7 @@ int main() {
 				if (foundTaskIndex == std::nullopt) { break; }
 				Task& foundTask = taskmanager.getTasks()[foundTaskIndex.value()];
 
-				std::cout << "\nRemoved " << foundTask.getTitle() << "." << std::endl;
+				std::cout << "\n\033[32mRemoved '\033[0m" << foundTask.getTitle() << "\033[32m'.\033[0m" << std::endl;
 				taskmanager.removeTask(foundTask.getTitle());
 				break;
 			}
@@ -400,7 +401,7 @@ int main() {
 				if (foundTaskIndex == std::nullopt) { break; }
 				Task& foundTask = taskmanager.getTasks()[foundTaskIndex.value()];
 
-				std::cout << "\nFound Task:" << std::endl;
+				std::cout << "\n\033[32mFound Task:\033[0m" << std::endl;
 				foundTask.print();
 				break;
 			}
@@ -420,17 +421,17 @@ int main() {
 					std::cout << "\nEnter new Task Status (Open/InProgress/Done):\n";
 					status = checkInp(status, StatStrVec);
 					if (status == EXIT_STR) { break; }
-					std::cout << "\nChanged Status of '" << foundTask.getTitle() << "' from '" << StatToStr(foundTask.getStatus());
+					std::cout << "\n\033[32mChanged Status of '\033[0m" << foundTask.getTitle() << "\033[32m' from '\033[0m" << StatToStr(foundTask.getStatus());
 					foundTask.setStatus(strToStat(status));
-					std::cout << "' to '" << StatToStr(foundTask.getStatus()) << "'." << std::endl; 
+					std::cout << "\033[32m' to '\033[0m" << StatToStr(foundTask.getStatus()) << "\033[32m'.\033[0m" << std::endl; 
 				}
 				if (inpChange == "2") {
 					std::cout << "\nEnter new Task Priority (Low/Medium/High):\n";
 					priority = checkInp(priority, PrioStrVec);
 					if (priority == EXIT_STR) { break; }
-					std::cout << "\nChanged Priority of '" << foundTask.getTitle() << "' from '" << PrioToStr(foundTask.getPriority());
+					std::cout << "\n\033[32mChanged Priority of '\033[0m" << foundTask.getTitle() << "\033[32m' from '\033[0m" << PrioToStr(foundTask.getPriority());
 					foundTask.setPriority(strToPrio(priority)) ;
-					std::cout << "' to '" << PrioToStr(foundTask.getPriority()) << "'." << std::endl;
+					std::cout << "\033[32m' to '\033[0m" << PrioToStr(foundTask.getPriority()) << "\033[32m'.\033[0m" << std::endl;
 				}
 				break;
 			}
@@ -485,7 +486,7 @@ int main() {
 				}
 				break;
 			default:
-				std::cout << "\n\033[31mNo valid Input.\033[0m" << std::endl;
+				std::cout << "\n\033[31mInvalid Input.\033[0m" << std::endl;
 		}
 	} while (inpChoice != 0);
 
