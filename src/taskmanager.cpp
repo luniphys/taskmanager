@@ -175,7 +175,7 @@ std::string StatToStr (const Status& stat) {
 
 
 void createJSON(TaskManager& taskmanager) {
-	std::ofstream file("tasks.json");
+	std::ofstream file("../data/tasks.json");
 	file << "{\"tasks\": [\n";
 	for (size_t i = 0; i < taskmanager.getTasks().size(); i++) {
 		file << "	{\"title\": \"" << taskmanager.getTasks()[i].getTitle() << "\", ";

@@ -1,0 +1,7 @@
+{"tasks": [
+	{"title": "job interview", "category": "work", "dueDate": "25-09-2026", "priority": "High", "status": "Open"},
+	{"title": "haircut", "category": "private", "dueDate": "17-10-2026", "priority": "Medium", "status": "Open"},
+	{"title": "christmas presents", "category": "private", "dueDate": "23-12-2026", "priority": "High", "status": "InProgress"},
+	{"title": "business meeting", "category": "work", "dueDate": "07-05-2026", "priority": "Low", "status": "Done"}
+	]
+}
