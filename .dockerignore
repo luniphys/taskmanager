@@ -1,0 +1,10 @@
+data/tasks.json
+data/tasks_example.json
+
+src/taskmanager
+
+.git
+.gitignore
+
+LICENSE
+README.md
