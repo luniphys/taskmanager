@@ -4,7 +4,9 @@
 #include <string>
 #include <optional>
 #include <fstream>
+#include <any>
 #include <sqlite3.h>
+#include <stdexcept>
 
 
 enum class Priority {Low, Medium, High};
@@ -54,22 +56,23 @@ class TaskManager {
 
 	public:
 		TaskManager() {
-			sqlite3_open("./data/tasks_sql.db", &db);
 			if (sqlite3_open("./data/tasks_sql.db", &db) != SQLITE_OK) {
-				std::cerr << sqlite3_errmsg(db) << std::endl;
+				std::string errorMsg = sqlite3_errmsg(db);
+				sqlite3_close(db);
+				throw std::runtime_error("Failed to open database: " + errorMsg);
 			}
 
 			sqlite3_stmt* stmt;
 			sqlite3_prepare_v2(db, R"(
 				CREATE TABLE IF NOT EXISTS tasks (
-					id			INTEGER		PRIMARY KEY		AUTOINCREMENT,
-					title 		str							NOT NULL,
-					category	str							NOT NULL,
-					dueDate		str							NOT NULL,
-					priority	int							NOT NULL,
-					status		int							NOT NULL
+					title 		TEXT		PRIMARY KEY,
+					category	TEXT		NOT NULL,
+					dueDate		TEXT		NOT NULL,
+					priority	INTEGER		NOT NULL,
+					status		INTEGER		NOT NULL
 					);
 				)", -1, &stmt, nullptr);
+				
 			sqlite3_step(stmt);
 			sqlite3_finalize(stmt);
 		};
@@ -78,7 +81,87 @@ class TaskManager {
 			sqlite3_close(db);
 		}
 
-		void addTask(const Task& task) {
+
+		std::vector<Task> getAllTasks() const {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks;
+				)", -1, &stmt, nullptr);
+
+			std::vector<Task> allTasks;
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				std::string title 	 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+				std::string category = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+				std::string dueDate  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+				Priority priority 	 = static_cast<Priority>(sqlite3_column_int(stmt, 4));
+				Status status 		 = static_cast<Status>(sqlite3_column_int(stmt, 5));
+				allTasks.push_back(Task(title, category, dueDate, priority, status));
+			}
+
+			sqlite3_finalize(stmt);
+
+			return allTasks;
+		}
+
+		std::vector<std::string> getAvailableCategories() const {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks;
+				)", -1, &stmt, nullptr);
+
+			std::vector<std::string> availableCategories;
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				std::string category = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+				if (std::find(availableCategories.begin(), availableCategories.end(), category) == availableCategories.end()) {
+					availableCategories.push_back(category);
+				}
+			}
+
+			sqlite3_finalize(stmt);
+
+			return availableCategories;
+		}
+
+		std::vector<Priority> getAvailablePriorities() const {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks;
+				)", -1, &stmt, nullptr);
+
+			std::vector<Priority> availablePriorities;
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				Priority priority = static_cast<Priority>(sqlite3_column_int(stmt, 4));
+				if (std::find(availablePriorities.begin(), availablePriorities.end(), priority) == availablePriorities.end()) {
+					availablePriorities.push_back(priority);
+				}
+			}
+
+			sqlite3_finalize(stmt);
+
+			return availablePriorities;
+		}
+
+		std::vector<Status> getAvailableStatuses() const {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks;
+				)", -1, &stmt, nullptr);
+
+			std::vector<Status> availableStatuses;
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				Status status = static_cast<Status>(sqlite3_column_int(stmt, 5));
+				if (std::find(availableStatuses.begin(), availableStatuses.end(), status) == availableStatuses.end()) {
+					availableStatuses.push_back(status);
+				}
+			}
+
+			sqlite3_finalize(stmt);
+
+			return availableStatuses;
+		}
+
+
+		bool addTask(const Task& task) {
 			sqlite3_stmt* stmt;
 			sqlite3_prepare_v2(db, R"(
 				INSERT INTO tasks (title, category, dueDate, priority, status) VALUES (?, ?, ?, ?, ?);
@@ -90,64 +173,163 @@ class TaskManager {
 			sqlite3_bind_int(stmt, 4, static_cast<int>(task.getPriority()));
 			sqlite3_bind_int(stmt, 5, static_cast<int>(task.getStatus()));
 
-			sqlite3_step(stmt);
+			int result = sqlite3_step(stmt);
 			sqlite3_finalize(stmt);
-	}
 
-		void removeTask(const std::string& title) {
-			tasks.erase(
-			std::remove_if(tasks.begin(), tasks.end(), [&](const Task& task) -> bool {return task.getTitle() == title;}),
-			tasks.end());
-
-		}
-
-		std::optional<size_t> findTaskIndex(const std::string& title) const {
-			for (size_t i = 0; i < tasks.size(); i++) {
-				if (tasks[i].getTitle() == title) {
-					return i;
-				}
+			if (result == SQLITE_CONSTRAINT) {
+				std::cout << "\033[31mTask '" << task.getTitle() << "' already exists.\033[0m" << std::endl;
+				return false;
 			}
-			return std::nullopt;
+			return result == SQLITE_DONE;
 		}
+
+		bool removeTask(const std::string& title) {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				DELETE FROM tasks WHERE title = ?;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_bind_text(stmt, 1, title.c_str(), -1, SQLITE_STATIC);
+
+			int result = sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
+
+			return result == SQLITE_DONE && sqlite3_changes(db) > 0;
+		}
+
+
+		std::optional<Task> findTask(const std::string& title) const {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks WHERE title = ?;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_bind_text(stmt, 1, title.c_str(), -1, SQLITE_STATIC);
+
+			std::optional<Task> foundTask = std::nullopt;
+			if (sqlite3_step(stmt) == SQLITE_ROW) {
+				std::string title 	 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+				std::string category = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+				std::string dueDate  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+				Priority priority 	 = static_cast<Priority>(sqlite3_column_int(stmt, 4));
+				Status status 		 = static_cast<Status>(sqlite3_column_int(stmt, 5));
+				foundTask = Task(title, category, dueDate, priority, status);
+			};
+
+			sqlite3_finalize(stmt);
+
+			return foundTask;
+		}
+
 
 		std::vector<Task> filterByCategory(const std::string& cat) const {
-			std::vector<Task> filterCategoryTasks;
-			for (const Task& task : tasks) {
-				if (task.getCategory() == cat) { 
-					filterCategoryTasks.push_back(task);
-				}
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks WHERE category = ?;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_bind_text(stmt, 1, cat.c_str(), -1, SQLITE_STATIC);
+
+			std::vector<Task> filteredCategoryTasks;
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				std::string title 	 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+				std::string category = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+				std::string dueDate  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+				Priority priority 	 = static_cast<Priority>(sqlite3_column_int(stmt, 4));
+				Status status 		 = static_cast<Status>(sqlite3_column_int(stmt, 5));
+				filteredCategoryTasks.push_back(Task(title, category, dueDate, priority, status));
 			}
-			return filterCategoryTasks;
+
+			sqlite3_finalize(stmt);
+
+			return filteredCategoryTasks;
 		}
 
 		std::vector<Task> filterByPriority(Priority prio) const {
-			std::vector<Task> filterPriorityTasks;
-			for (const Task& task : tasks) {
-				if (task.getPriority() == prio) {
-					filterPriorityTasks.push_back(task);
-				}
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks WHERE priority = ?;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_bind_int(stmt, 1, static_cast<int>(prio));
+
+			std::vector<Task> filteredPriorityTasks;
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				std::string title 	 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+				std::string category = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+				std::string dueDate  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+				Priority priority 	 = static_cast<Priority>(sqlite3_column_int(stmt, 4));
+				Status status 		 = static_cast<Status>(sqlite3_column_int(stmt, 5));
+				filteredPriorityTasks.push_back(Task(title, category, dueDate, priority, status));
 			}
-			return filterPriorityTasks;
+
+			sqlite3_finalize(stmt);
+
+			return filteredPriorityTasks;
 		}
 
 		std::vector<Task> filterByStatus(Status stat) const {
-			std::vector<Task> filterStatusTasks;
-			for (const Task& task : tasks) {
-				if (task.getStatus() == stat) {
-					filterStatusTasks.push_back(task);
-				}
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks WHERE status = ?;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_bind_int(stmt, 1, static_cast<int>(stat));
+
+			std::vector<Task> filteredStatusTasks;
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				std::string title 	 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+				std::string category = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+				std::string dueDate  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+				Priority priority 	 = static_cast<Priority>(sqlite3_column_int(stmt, 4));
+				Status status 		 = static_cast<Status>(sqlite3_column_int(stmt, 5));
+				filteredStatusTasks.push_back(Task(title, category, dueDate, priority, status));
 			}
-			return filterStatusTasks;
+
+			sqlite3_finalize(stmt);
+
+			return filteredStatusTasks;
 		}
 
+
 		void sortByTitle() {
-			std::sort(tasks.begin(), tasks.end(),
-			[](const Task &taskone, const Task &tasktwo) -> bool {return (taskone.getTitle() < tasktwo.getTitle());});
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks GROUP BY title;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
+		}
+
+		void sortByCategory() {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks GROUP BY category;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
 		}
 
 		void sortByPriority() {
-			std::sort(tasks.begin(), tasks.end(),
-			[](const Task& taskone, const Task& tasktwo) -> bool {return static_cast<int>(taskone.getPriority()) < static_cast<int>(tasktwo.getPriority());});
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks GROUP BY priority;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
+		}
+
+		void sortByStatus() {
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				SELECT * FROM tasks GROUP BY status;
+				)", -1, &stmt, nullptr);
+
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
 		}
 };
 
@@ -295,11 +477,11 @@ std::string valiDATE() {
 }
 
 
-std::optional<size_t> checkTaskInp(TaskManager& taskmanager) {
+std::optional<Task> findTaskPrompt(const TaskManager& taskmanager) {
 	std::string title;
-	std::optional<size_t> foundTaskIndex = std::nullopt;
+	std::optional<Task> foundTask = std::nullopt;
 	std::cout << "Enter Task Title:\n[Enter 0 to exit.]" << std::endl;
-	while (foundTaskIndex == std::nullopt && title != EXIT_STR) {
+	while (foundTask == std::nullopt && title != EXIT_STR) {
 		std::cout << "-> ";
 		std::getline(std::cin, title);
 
@@ -307,37 +489,50 @@ std::optional<size_t> checkTaskInp(TaskManager& taskmanager) {
 			break;
 		}
 		std::transform(title.begin(), title.end(), title.begin(), ::tolower);
-		foundTaskIndex = taskmanager.findTaskIndex(title);
-		if (foundTaskIndex == std::nullopt) {
+		foundTask = taskmanager.findTask(title);
+		if (foundTask == std::nullopt) {
 			std::cout << "\n\033[31mNo Task with name '\033[0m" << title << "\033[31m' found.\033[0m" << std::endl;
 		}
 	}
-	return foundTaskIndex;
+	return foundTask;
 }
 
-std::string checkInp(std::string& inpStr, const std::vector<std::string>& allowVec) {
-	std::vector<std::string> allowVecLow;
-	for (std::string elem : allowVec) {
-		std::transform(elem.begin(), elem.end(), elem.begin(), ::tolower);
-		allowVecLow.push_back(elem);
+
+std::string checkAttributePrompt(const TaskManager& taskmanager, const int& attribute, std::string& value) {
+
+	std::vector<std::any> allowedValues;
+	switch (attribute) {
+		case 0: {
+			std::vector<std::string> allowedValues = taskmanager.getAvailableCategories();
+			break;
+		}
+		case 1: {
+			std::vector<Priority> allowedValues = taskmanager.getAvailablePriorities();
+			break;
+		}
+		case 2: {
+			std::vector<Status> allowedValues = taskmanager.getAvailableStatuses();
+			break;
+		}
 	}
+
 	std::cout << "[Enter 0 to exit.]" << std::endl;
 	do {
 		std::cout << "-> ";
-		std::getline(std::cin, inpStr);
-		if (inpStr == EXIT_STR) {
+		std::getline(std::cin, value);
+		if (value == EXIT_STR) {
 			break;
 		}
-		std::transform(inpStr.begin(), inpStr.end(), inpStr.begin(), ::tolower);
-		if (std::find(allowVecLow.begin(), allowVecLow.end(), inpStr) == allowVecLow.end()) {
+		std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+		if (std::find(allowedValues.begin(), allowedValues.end(), value) == allowedValues.end()) {
 			std::cout << "\n\033[31mNot a valid Input.\033[0m\nAvailable Inputs: ";
-			for (std::string elem : allowVec) {
+			for (auto elem : allowedValues) {
 				std::cout << elem << " ";
 			}
 			std::cout << std::endl;
 		}
-	} while (std::find(allowVecLow.begin(), allowVecLow.end(), inpStr) == allowVecLow.end() && inpStr != EXIT_STR);
-	return inpStr;
+	} while (std::find(allowedValues.begin(), allowedValues.end(), value) != allowedValues.end() && value != EXIT_STR);
+	return value;
 }
 
 
@@ -368,14 +563,16 @@ void createJSON(TaskManager& taskmanager) {
         return;
     }
 
+	std::vector<Task> tasks = taskmanager.getAllTasks();
+
 	file << "{\"tasks\": [\n";
-	for (size_t i = 0; i < taskmanager.getTasks().size(); i++) {
-		file << "{\"title\": \"" << taskmanager.getTasks()[i].getTitle() << "\", ";
-		file << "\"category\": \"" << taskmanager.getTasks()[i].getCategory() << "\", ";
-		file << "\"dueDate\": \"" << taskmanager.getTasks()[i].getDueDate() << "\", ";
-		file << "\"priority\": \"" << PrioToStr(taskmanager.getTasks()[i].getPriority()) << "\", ";
-		file << "\"status\": \"" << StatToStr(taskmanager.getTasks()[i].getStatus()) << "\"}";
-		if (i != taskmanager.getTasks().size() - 1) {
+	for (size_t i = 0; i < tasks.size(); i++) {
+		file << "{\"title\": \"" << tasks[i].getTitle() << "\", ";
+		file << "\"category\": \"" << tasks[i].getCategory() << "\", ";
+		file << "\"dueDate\": \"" << tasks[i].getDueDate() << "\", ";
+		file << "\"priority\": \"" << PrioToStr(tasks[i].getPriority()) << "\", ";
+		file << "\"status\": \"" << StatToStr(tasks[i].getStatus()) << "\"}";
+		if (i != tasks.size() - 1) {
 			file << ",\n";
 		}
 	}
@@ -387,187 +584,194 @@ void createJSON(TaskManager& taskmanager) {
 
 int main() {
 
-	TaskManager taskmanager;
+	try {
+		TaskManager taskmanager;
 
-	// /*
-	// Test examples
-	Task addfct("job interview", "work", "25-09-2026", Priority::High, Status::Open);
-	Task custcall("haircut", "private", "17-10-2026", Priority::Medium, Status::Open);
-	Task cleaning("christmas presents", "private", "23-12-2026", Priority::High, Status::InProgress);
-	Task files("business meeting", "work", "07-05-2026", Priority::Low, Status::Done);
-	taskmanager.addTask(addfct);
-	taskmanager.addTask(custcall);
-	taskmanager.addTask(cleaning);
-	taskmanager.addTask(files);
-	// */
-
-
-	int inpChoice;
-	std::string inpMenu, title, category, dueDate, priority, status, inpChange, inpSort;
-	std::string emptyStr = "";
-	std::vector<std::string> PrioStrVec = {"Low", "Medium", "High"};
-	std::vector<std::string> StatStrVec = {"Open", "InProgress", "In Progress", "Done"};
-	std::vector<std::string> ChangeStrVec = {"1", "2"};
-	
-	do {
-
-		createJSON(taskmanager);
-
-		std::cout << "\n**************************************************************************" << std::endl;
-		std::cout << "Task Manager:\n1: Add Task\n2: Remove Task\n3: Find Task\n4: Change Status/Priority" <<
-					 "\n5: List available Tasks\n6: Filter by Category\n7: Filter by Priority" <<
-					 "\n8: Filter by Status\n9: Sort Tasks\n0: End\n-> ";
-
-		std::getline(std::cin, inpMenu);
-		try {
-			inpChoice = stoi(inpMenu);
-		}
-		catch (std::exception&) {
-			std::cout << "\n\033[31mInvalid Input.\033[0m" << std::endl;
-			continue;
-		}
+		// /*
+		// Test examples
+		Task addfct("job interview", "work", "25-09-2026", Priority::High, Status::Open);
+		Task custcall("haircut", "private", "17-10-2026", Priority::Medium, Status::Open);
+		Task cleaning("christmas presents", "private", "23-12-2026", Priority::High, Status::InProgress);
+		Task files("business meeting", "work", "07-05-2026", Priority::Low, Status::Done);
+		taskmanager.addTask(addfct);
+		taskmanager.addTask(custcall);
+		taskmanager.addTask(cleaning);
+		taskmanager.addTask(files);
+		// */
 
 
-		switch (inpChoice) {
-			case 0: // Stop Loop
-				std::cout << "\n\033[32mBye, bye!\033[0m :)\n" << std::endl;
-				break;
-			case 1: { // Add Task 
-				std::cout << "\nAdd Task.\nEnter Task Title:\n[Enter 0 to exit.]\n-> ";
-				std::getline(std::cin, title);
-				if (title == EXIT_STR) { break; }
-				std::transform(title.begin(), title.end(), title.begin(), ::tolower);
+		int inpChoice;
+		std::string inpMenu, title, category, dueDate, priority, status, inpChange, inpSort;
+		std::string emptyStr = "";
+		std::vector<std::string> PrioStrVec = {"Low", "Medium", "High"};
+		std::vector<std::string> StatStrVec = {"Open", "InProgress", "In Progress", "Done"};
+		std::vector<std::string> ChangeStrVec = {"1", "2"};
+		
+		do {
+			createJSON(taskmanager);
 
-				std::cout << "\nEnter Task Category:\n[Enter 0 to exit.]\n-> ";
-				std::getline(std::cin, category);
-				if (category == EXIT_STR) { break; }
-				std::transform(category.begin(), category.end(), category.begin(), ::tolower);
+			std::cout << "\n**************************************************************************" << std::endl;
+			std::cout << "Task Manager:\n1: Add Task\n2: Remove Task\n3: Find Task\n4: Change Status/Priority" <<
+						"\n5: List available Tasks\n6: Filter by Category\n7: Filter by Priority" <<
+						"\n8: Filter by Status\n9: Sort Tasks\n0: End\n-> ";
 
-				std::cout << "\nEnter Task Due Date (DD-MM-YYYY):\n[Enter 0 to exit.]" << std::endl;
-				dueDate = valiDATE();
-				if (dueDate == EXIT_STR) { break; }
-
-				std::cout << "\nEnter Task Priority (Low/Medium/High):" << std::endl;
-				priority = checkInp(priority, PrioStrVec);
-				if (priority == EXIT_STR) { break; }
-
-				std::cout << "\nEnter Task Status (Open/InProgress/Done):" << std::endl;
-				status = checkInp(status, StatStrVec);
-				if (status == EXIT_STR) { break; }
-
-				Task task(title, category, dueDate, strToPrio(priority), strToStat(status));
-				taskmanager.addTask(task);
-
-				std::cout << "\n\033[32mAdded\033[0m '" << title << "\033[32m'.\033[0m" << std::endl;
-				break;
+			std::getline(std::cin, inpMenu);
+			try {
+				inpChoice = stoi(inpMenu);
 			}
-			case 2: { // Remove Task
-				std::cout << "\nRemove Task." << std::endl;
-				std::optional<size_t> foundTaskIndex = checkTaskInp(taskmanager);
-				if (foundTaskIndex == std::nullopt) { break; }
-				Task& foundTask = taskmanager.getTasks()[foundTaskIndex.value()];
-
-				std::cout << "\n\033[32mRemoved '\033[0m" << foundTask.getTitle() << "\033[32m'.\033[0m" << std::endl;
-				taskmanager.removeTask(foundTask.getTitle());
-				break;
+			catch (std::exception&) {
+				std::cout << "\n\033[31mInvalid Input.\033[0m" << std::endl;
+				continue;
 			}
-			case 3: { // Find Task
-				std::cout << "\nFind Task." << std::endl;
-				std::optional<size_t> foundTaskIndex = checkTaskInp(taskmanager);
-				if (foundTaskIndex == std::nullopt) { break; }
-				Task& foundTask = taskmanager.getTasks()[foundTaskIndex.value()];
 
-				std::cout << "\n\033[32mFound Task:\033[0m" << std::endl;
-				foundTask.print();
-				break;
-			}
-			case 4: { // Change Status/Priority
-				std::cout << "\nChange Status/Priority." << std::endl;
-				std::optional<size_t> foundTaskIndex = checkTaskInp(taskmanager);
-				if (foundTaskIndex == std::nullopt) { break; }
-				Task& foundTask = taskmanager.getTasks()[foundTaskIndex.value()];
 
-				std::cout << std::endl;
-				foundTask.print();
-				
-				std::cout << "\nChange Status (1) / Priority (2):\n";
-				inpChange = checkInp(inpChange, ChangeStrVec);
-				
-				if (inpChange == "1") {
-					std::cout << "\nEnter new Task Status (Open/InProgress/Done):\n";
-					status = checkInp(status, StatStrVec);
-					if (status == EXIT_STR) { break; }
-					std::cout << "\n\033[32mChanged Status of '\033[0m" << foundTask.getTitle() << "\033[32m' from '\033[0m" << StatToStr(foundTask.getStatus());
-					foundTask.setStatus(strToStat(status));
-					std::cout << "\033[32m' to '\033[0m" << StatToStr(foundTask.getStatus()) << "\033[32m'.\033[0m" << std::endl; 
-				}
-				if (inpChange == "2") {
-					std::cout << "\nEnter new Task Priority (Low/Medium/High):\n";
+			switch (inpChoice) {
+				case 0: // Stop Loop
+					std::cout << "\n\033[32mBye, bye!\033[0m :)\n" << std::endl;
+					break;
+				case 1: { // Add Task 
+					std::cout << "\nAdd Task.\nEnter Task Title:\n[Enter 0 to exit.]\n-> ";
+					std::getline(std::cin, title);
+					if (title == EXIT_STR) { break; }
+					std::transform(title.begin(), title.end(), title.begin(), ::tolower);
+
+					std::cout << "\nEnter Task Category:\n[Enter 0 to exit.]\n-> ";
+					std::getline(std::cin, category);
+					if (category == EXIT_STR) { break; }
+					std::transform(category.begin(), category.end(), category.begin(), ::tolower);
+
+					std::cout << "\nEnter Task Due Date (DD-MM-YYYY):\n[Enter 0 to exit.]" << std::endl;
+					dueDate = valiDATE();
+					if (dueDate == EXIT_STR) { break; }
+
+					std::cout << "\nEnter Task Priority (Low/Medium/High):" << std::endl;
 					priority = checkInp(priority, PrioStrVec);
 					if (priority == EXIT_STR) { break; }
-					std::cout << "\n\033[32mChanged Priority of '\033[0m" << foundTask.getTitle() << "\033[32m' from '\033[0m" << PrioToStr(foundTask.getPriority());
-					foundTask.setPriority(strToPrio(priority)) ;
-					std::cout << "\033[32m' to '\033[0m" << PrioToStr(foundTask.getPriority()) << "\033[32m'.\033[0m" << std::endl;
-				}
-				break;
-			}
-			case 5: { // List All Tasks
-				printMany(taskmanager.getTasks(), false, emptyStr);
-				break;
-			}
-			case 6: { // Filter by Category		
-				std::vector<std::string> CatStrVec;
-				for (const Task& task : taskmanager.getTasks()) {
-					if (std::find(CatStrVec.begin(), CatStrVec.end(), task.getCategory()) == CatStrVec.end()) {
-						CatStrVec.push_back(task.getCategory());
+
+					std::cout << "\nEnter Task Status (Open/InProgress/Done):" << std::endl;
+					status = checkInp(status, StatStrVec);
+					if (status == EXIT_STR) { break; }
+
+					Task task(title, category, dueDate, strToPrio(priority), strToStat(status));
+					if (taskmanager.addTask(task)) {
+						std::cout << "\n\033[32mAdded\033[0m '" << title << "\033[32m'.\033[0m" << std::endl;
 					}
+					else {
+						std::cout << "\n\033[31mCould not add\033[0m '" << title << "\033[31m'.\033[0m" << std::endl;
+					}
+					break;
 				}
-				std::cout << "\nFilter Category.\nEnter Category name:" << std::endl;
-				category = checkInp(category, CatStrVec);
-				if (category == EXIT_STR) { break; }
-
-				std::vector<Task> filteredTasks = taskmanager.filterByCategory(category);
-				printMany(filteredTasks, true, category);
-				break;
-			}
-			case 7: { // Filter by Priority
-				std::cout << "\nFilter Priority.\nEnter Priority level (Low/Medium/High):" << std::endl;
-				priority = checkInp(priority, PrioStrVec);
-				if (priority == EXIT_STR) { break; }
-				
-				std::vector<Task> filteredTasks = taskmanager.filterByPriority(strToPrio(priority));
-				printMany(filteredTasks, true, priority);
-				break;
-			}
-			case 8: { // Filter by Status
-				std::cout << "\nFilter Status.\nEnter Status level (Open/InProgress/Done):" << std::endl;
-				status = checkInp(status, StatStrVec);
-				if (status == EXIT_STR) { break; }
-
-				std::vector<Task> filteredTasks = taskmanager.filterByStatus(strToStat(status));
-				printMany(filteredTasks, true, status);
-				break;
-			}
-			case 9: // Sort alphabetically / by Priority
-				std::cout << "\nSort Alphabetically (1) / By Priority (2):\n";
-				inpSort = checkInp(inpSort, ChangeStrVec);
-
-				if (inpSort == "1") {
-					taskmanager.sortByTitle();
-					printMany(taskmanager.getTasks(), false, emptyStr);
+				case 2: { // Remove Task
+					std::cout << "\nRemove Task." << std::endl;
+					std::optional<Task> foundTask = findTaskPrompt(taskmanager);
+					if (foundTask == std::nullopt) { break; }
+					
+					if (taskmanager.removeTask(foundTask->getTitle())) {
+						std::cout << "\n\033[32mRemoved '\033[0m" << foundTask->getTitle() << "\033[32m'.\033[0m" << std::endl;
+					}
+					else {
+						std::cout << "\n\033[31mCould not remove\033[0m '" << title << "\033[31m'.\033[0m" << std::endl;
+					}
+					break;
 				}
-				else if (inpSort == "2") {
-					taskmanager.sortByPriority();
-					printMany(taskmanager.getTasks(), false, emptyStr);
-				}
-				break;
-			default:
-				std::cout << "\n\033[31mInvalid Input.\033[0m" << std::endl;
-		}
-	} while (inpChoice != 0);
+				case 3: { // Find Task
+					std::cout << "\nFind Task." << std::endl;
+					std::optional<Task> foundTask = findTaskPrompt(taskmanager);
+					if (foundTask == std::nullopt) { break; }
 
-	return 0;
+					std::cout << "\n\033[32mFound Task:\033[0m" << std::endl;
+					foundTask->print();
+					break;
+				}
+				case 4: { // Change Status/Priority
+					std::cout << "\nChange Status/Priority." << std::endl;
+					std::optional<Task> foundTask = findTaskPrompt(taskmanager);
+					if (foundTask == std::nullopt) { break; }
+
+					std::cout << std::endl;
+					foundTask->print();
+					
+					std::cout << "\nChange Status (1) / Priority (2):\n";
+					inpChange = checkInp(inpChange, ChangeStrVec);
+					
+					if (inpChange == "1") {
+						std::cout << "\nEnter new Task Status (Open/InProgress/Done):\n";
+						status = checkInp(status, StatStrVec);
+						if (status == EXIT_STR) { break; }
+						std::cout << "\n\033[32mChanged Status of '\033[0m" << foundTask.getTitle() << "\033[32m' from '\033[0m" << StatToStr(foundTask.getStatus());
+						foundTask.setStatus(strToStat(status));
+						std::cout << "\033[32m' to '\033[0m" << StatToStr(foundTask.getStatus()) << "\033[32m'.\033[0m" << std::endl; 
+					}
+					if (inpChange == "2") {
+						std::cout << "\nEnter new Task Priority (Low/Medium/High):\n";
+						priority = checkInp(priority, PrioStrVec);
+						if (priority == EXIT_STR) { break; }
+						std::cout << "\n\033[32mChanged Priority of '\033[0m" << foundTask.getTitle() << "\033[32m' from '\033[0m" << PrioToStr(foundTask.getPriority());
+						foundTask.setPriority(strToPrio(priority)) ;
+						std::cout << "\033[32m' to '\033[0m" << PrioToStr(foundTask.getPriority()) << "\033[32m'.\033[0m" << std::endl;
+					}
+					break;
+				}
+				case 5: { // List All Tasks
+					printMany(taskmanager.getAllTasks(), false, emptyStr);
+					break;
+				}
+				case 6: { // Filter by Category
+					std::optional<std::vector<Task>> filteredTasks = std::nullopt;
+
+					std::cout << "\nFilter Category.\nEnter Category name:" << std::endl;
+					category = checkAttributePrompt(taskmanager, 0, category);
+					if (category == EXIT_STR) { break; }
+
+					filteredTasks = taskmanager.filterByCategory(category);
+					printMany(filteredTasks.value(), true, category);
+					break;
+				}
+				case 7: { // Filter by Priority
+					std::cout << "\nFilter Priority.\nEnter Priority level (Low/Medium/High):" << std::endl;
+					priority = checkInp(priority, PrioStrVec);
+					if (priority == EXIT_STR) { break; }
+					
+					std::vector<Task> filteredTasks = taskmanager.filterByPriority(strToPrio(priority));
+					printMany(filteredTasks, true, priority);
+					break;
+				}
+				case 8: { // Filter by Status
+					std::cout << "\nFilter Status.\nEnter Status level (Open/InProgress/Done):" << std::endl;
+					status = checkInp(status, StatStrVec);
+					if (status == EXIT_STR) { break; }
+
+					std::vector<Task> filteredTasks = taskmanager.filterByStatus(strToStat(status));
+					printMany(filteredTasks, true, status);
+					break;
+				}
+				case 9: // Sort alphabetically / by Priority
+					std::cout << "\nSort Alphabetically (1) / By Priority (2):\n";
+					inpSort = checkInp(inpSort, ChangeStrVec);
+
+					if (inpSort == "1") {
+						taskmanager.sortByTitle();
+						printMany(taskmanager.getTasks(), false, emptyStr);
+					}
+					else if (inpSort == "2") {
+						taskmanager.sortByPriority();
+						printMany(taskmanager.getTasks(), false, emptyStr);
+					}
+					break;
+				default:
+					std::cout << "\n\033[31mInvalid Input.\033[0m" << std::endl;
+			}
+		} while (inpChoice != 0);
+
+		return 0;
+	}
+
+	catch (const std::runtime_error& e) {
+		std::cerr << e.what() << std::endl;
+		return 1;
+	}
 }
 
 
 // TODO: tasks_sql_example.db
+// TODO: Sorting also by category & status
