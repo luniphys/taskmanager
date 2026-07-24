@@ -4,6 +4,7 @@
 #include <string>
 #include <optional>
 #include <fstream>
+#include <sqlite3.h>
 
 
 enum class Priority {Low, Medium, High};
@@ -49,14 +50,49 @@ class Task {
 
 class TaskManager {
 	private:
-		std::vector<Task> tasks;
+		sqlite3* db;
 
 	public:
-		std::vector<Task>& getTasks() { return tasks; }
+		TaskManager() {
+			sqlite3_open("./data/tasks_sql.db", &db);
+			if (sqlite3_open("./data/tasks_sql.db", &db) != SQLITE_OK) {
+				std::cerr << sqlite3_errmsg(db) << std::endl;
+			}
+
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				CREATE TABLE IF NOT EXISTS tasks (
+					id			INTEGER		PRIMARY KEY		AUTOINCREMENT,
+					title 		str							NOT NULL,
+					category	str							NOT NULL,
+					dueDate		str							NOT NULL,
+					priority	int							NOT NULL,
+					status		int							NOT NULL
+					);
+				)", -1, &stmt, nullptr);
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
+		};
+
+		~TaskManager() {
+			sqlite3_close(db);
+		}
 
 		void addTask(const Task& task) {
-			tasks.push_back(task);
-		}
+			sqlite3_stmt* stmt;
+			sqlite3_prepare_v2(db, R"(
+				INSERT INTO tasks (title, category, dueDate, priority, status) VALUES (?, ?, ?, ?, ?);
+				)", -1, &stmt, nullptr);
+
+			sqlite3_bind_text(stmt, 1, task.getTitle().c_str(), -1, SQLITE_STATIC);
+			sqlite3_bind_text(stmt, 2, task.getCategory().c_str(), -1, SQLITE_STATIC);
+			sqlite3_bind_text(stmt, 3, task.getDueDate().c_str(), -1, SQLITE_STATIC);
+			sqlite3_bind_int(stmt, 4, static_cast<int>(task.getPriority()));
+			sqlite3_bind_int(stmt, 5, static_cast<int>(task.getStatus()));
+
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
+	}
 
 		void removeTask(const std::string& title) {
 			tasks.erase(
@@ -146,7 +182,6 @@ Status strToStat(const std::string& inp) {
 	throw std::invalid_argument("\033[31mInvalid Status:\033[0m " + inp);
 }
 
-
 std::string PrioToStr (const Priority& prio) {
 	if (prio == Priority::Low) {
 		return "Low";
@@ -174,24 +209,6 @@ std::string StatToStr (const Status& stat) {
 }
 
 
-void createJSON(TaskManager& taskmanager) {
-	std::ofstream file("../data/tasks.json");
-	file << "{\"tasks\": [\n";
-	for (size_t i = 0; i < taskmanager.getTasks().size(); i++) {
-		file << "	{\"title\": \"" << taskmanager.getTasks()[i].getTitle() << "\", ";
-		file << "\"category\": \"" << taskmanager.getTasks()[i].getCategory() << "\", ";
-		file << "\"dueDate\": \"" << taskmanager.getTasks()[i].getDueDate() << "\", ";
-		file << "\"priority\": \"" << PrioToStr(taskmanager.getTasks()[i].getPriority()) << "\", ";
-		file << "\"status\": \"" << StatToStr(taskmanager.getTasks()[i].getStatus()) << "\"}";
-		if (i != taskmanager.getTasks().size() - 1) {
-			file << ",\n";
-		}
-	}
-	file << "\n	]\n}";
-	file.close();
-}
-
-
 constexpr const char* EXIT_STR = "0";
 
 std::string valiDATE() {
@@ -208,7 +225,7 @@ std::string valiDATE() {
 
     const int DATE_LENGTH = 10;
 
-    const std::vector<char> SEPARATORS = {'-', '/', '.'};
+    const std::vector<char> SEPARATORS = {'-', '/', '.', ','};
 
     std::string date;
     bool date_valid = false;
@@ -323,6 +340,7 @@ std::string checkInp(std::string& inpStr, const std::vector<std::string>& allowV
 	return inpStr;
 }
 
+
 void printMany(const std::vector<Task>& tasks, bool filterBool, const std::string& CatPrioStat) {
 	std::cout << "\n--------------------------------------------------------------------------" << std::endl;
 	if (tasks.size() == 0 && filterBool) {
@@ -343,21 +361,45 @@ void printMany(const std::vector<Task>& tasks, bool filterBool, const std::strin
 }
 
 
+void createJSON(TaskManager& taskmanager) {
+	std::ofstream file("./data/tasks.json");
+	if (!file.is_open()) {
+        std::cerr << "\033[31mFailed to open tasks.json: \033[0m" << std::endl;
+        return;
+    }
+
+	file << "{\"tasks\": [\n";
+	for (size_t i = 0; i < taskmanager.getTasks().size(); i++) {
+		file << "{\"title\": \"" << taskmanager.getTasks()[i].getTitle() << "\", ";
+		file << "\"category\": \"" << taskmanager.getTasks()[i].getCategory() << "\", ";
+		file << "\"dueDate\": \"" << taskmanager.getTasks()[i].getDueDate() << "\", ";
+		file << "\"priority\": \"" << PrioToStr(taskmanager.getTasks()[i].getPriority()) << "\", ";
+		file << "\"status\": \"" << StatToStr(taskmanager.getTasks()[i].getStatus()) << "\"}";
+		if (i != taskmanager.getTasks().size() - 1) {
+			file << ",\n";
+		}
+	}
+	file << "\n	]\n}";
+	file.close();
+}
+
+
+
 int main() {
-	
+
 	TaskManager taskmanager;
 
-	/*
+	// /*
 	// Test examples
-	Task addfct("adding max function", "it", "28-02-2026", Priority::Medium, Status::Open);
-	Task custcall("call customer id:1907", "customer service", "25-12-2025", Priority::High, Status::InProgress);
-	Task cleaning("cleaning table", "private", "05-12-2025", Priority::Low, Status::Done);
-	Task files("sending files to co-worker:650", "it", "01-01-2026", Priority::High, Status::Open);
+	Task addfct("job interview", "work", "25-09-2026", Priority::High, Status::Open);
+	Task custcall("haircut", "private", "17-10-2026", Priority::Medium, Status::Open);
+	Task cleaning("christmas presents", "private", "23-12-2026", Priority::High, Status::InProgress);
+	Task files("business meeting", "work", "07-05-2026", Priority::Low, Status::Done);
 	taskmanager.addTask(addfct);
 	taskmanager.addTask(custcall);
 	taskmanager.addTask(cleaning);
 	taskmanager.addTask(files);
-	*/
+	// */
 
 
 	int inpChoice;
@@ -415,6 +457,7 @@ int main() {
 
 				Task task(title, category, dueDate, strToPrio(priority), strToStat(status));
 				taskmanager.addTask(task);
+
 				std::cout << "\n\033[32mAdded\033[0m '" << title << "\033[32m'.\033[0m" << std::endl;
 				break;
 			}
@@ -525,3 +568,6 @@ int main() {
 
 	return 0;
 }
+
+
+// TODO: tasks_sql_example.db

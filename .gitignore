@@ -1,3 +1,4 @@
 src/taskmanager
 data/tasks.json
+data/tasks_sql.db
 .vscode/

@@ -1,4 +1,5 @@
 ![C++](https://img.shields.io/badge/C++-%2300599C.svg?logo=c%2B%2B&logoColor=white)
+[![SQLite](https://img.shields.io/badge/SQLite-%2307405e.svg?logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-%230db7ed.svg?&logo=docker&logoColor=white)](https://hub.docker.com/r/luniphys/taskmanager)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -20,13 +21,13 @@ The app is designed to manage tasks in a simple and structured way. Users can cr
 Compile the file:
 
 ```bash
-g++ src/taskmanager.cpp -o src/taskmanager
+g++ src/taskmanager.cpp -o src/taskmanager -lsqlite3
 ```
 
 Run the file:
 
 ```bash
-g++ ./src/taskmanager
+./src/taskmanager
 ```
 
 ## Docker
